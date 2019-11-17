@@ -2,6 +2,7 @@
 #define _PDLIB_LL
 
 //#define PART_LM4F120H5QR
+#define PDLIB_DEBUG
 
 #if defined(PART_LM4F120H5QR)
   void NRF24L01_SetInterface(unsigned long ulCEBase, unsigned long ulCEPin, unsigned long ulCEPeriph, unsigned long ulCSNBase, unsigned long ulCSNPin, unsigned long ulCSNPeriph, unsigned char ucSSIIndex);
