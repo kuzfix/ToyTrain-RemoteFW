@@ -24,7 +24,7 @@ int main(void)
   char pipe;
   char temp;
   unsigned char address[5] = {0xDE, 0xAD, 0xBE, 0xEF, 0x01};
-  char data[33]="New msg...";
+  char data[33]="Wake";
 
 	KBD_Init();
 	LED_Init();
@@ -41,15 +41,15 @@ int main(void)
   _delay_ms(5);
   NRF24L01_SetAirDataRate(PDLIB_NRF24_DRATE_1MBPS);
   NRF24L01_SetARD(750);
-  //NRF24L01_SetARC(8);
-  NRF24L01_SetPAGain(-18);
+  NRF24L01_SetARC(15);
+  NRF24L01_SetPAGain(-12);
   /* Set the address */
   NRF24L01_SetTXAddress(address);
-	
+	printf("while(1):\r\n");
   while(1)
 	{
     printf("S");
-  	status = NRF24L01_SendData(data, 6);
+  	status = NRF24L01_SendData(data, 4);
     printf("s");
   	if(PDLIB_NRF24_TX_FIFO_FULL == status)
   	{
@@ -66,7 +66,10 @@ int main(void)
   	}
     printf("y");
     _delay_ms(300);
-  }    
+  }  
+  
+  
+    
   while (1) 
   {
     if (HasOneMillisecondPassed())
