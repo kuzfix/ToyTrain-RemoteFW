@@ -15,15 +15,14 @@
 #include "UART0_IRQ.h"
 #include <util/delay.h>
 
-int WakeupReceiver();
+#define MAX_RETRIES 200
+int WakeUpReceiver();
 
 int main(void)
 {
-  int oldSuccess=0;
   char temp;
   uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
   uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
-  uint8_t data[33]="Wake";
 
 	KBD_Init();
 	LED_Init();
@@ -40,7 +39,25 @@ int main(void)
 	printf("while(1):\r\n");
   while (1)
   {
-    
+    if (HasOneMillisecondPassed())
+    {
+      if (WakeUpReceiver())
+      {
+        nrf24_send((uint8_t*)"Msg!");
+        while(nrf24_isSending());         // Wait for transmission to end
+        temp = nrf24_lastMessageStatus(); // Make analysis on last transmission attempt
+        if(temp == NRF24_TRANSMISSON_OK)
+        {
+          temp = nrf24_retransmissionCount();
+          printf(" OK R=%d\r\n",temp);
+        }
+        else if(temp == NRF24_MESSAGE_LOST)
+        {
+          printf(" e\r\n");
+        }
+      }
+    }
+    /*
     nrf24_send(data);                  // Automatically goes to TX mode
     while(nrf24_isSending());         // Wait for transmission to end 
     
@@ -63,63 +80,50 @@ int main(void)
     nrf24_powerUpRx();  // Optionally, go back to RX mode ...
     // nrf24_powerDown(); //Or you might want to power down after TX
 
-    _delay_ms(10);
+    _delay_ms(10);*/
   }
 }
 
-int WakeupReceiver()
+int WakeUpReceiver()
 {
   static int state=0;
-  char data[32]="Wake up!?!";
+  uint8_t data[32]="Wake";
   static int cnt=0;
-  static int status=0;
-  int result=0, new_st;
+  int status=0;
+  int result=0;
     
-/*  switch (state)
+  switch (state)
   {
     case 0:
-      NRF24L01_FlushTX();
-      status = NRF24L01_SendData(data,6);
+      nrf24_send(data);
+      cnt=0;
       state++;
       break;
     case 1:
-      if (status == PDLIB_NRF24_SUCCESS)
+      if (nrf24_isSending()) break;
+      status = nrf24_lastMessageStatus();
+      if(status == NRF24_TRANSMISSON_OK)
       {
         result = 1;
         state = 0;
-        printf("success");
-        _delay_ms(1000);
+        printf("C%d",cnt);
       }
-      else if (status == PDLIB_NRF24_TX_ARC_REACHED) 
+      else //if(status == NRF24_MESSAGE_LOST)
       {
-        NRF24L01_FlushTX();
-        status = NRF24L01_SendData(data,6);
-        if (cnt > 333)
-        {
-          printf("R");
-          cnt=0;
-        }
         cnt++;
+        if (cnt > MAX_RETRIES)  //after MAX_RETRIES Give up
+        {
+          result = -1;
+          state = 0;
+          printf("F");
+        }
+        nrf24_send(data);
       }
-      else
-      {
-        //status = NRF24L01_SendData(data,1);
-        new_st = NRF24L01_AttemptTx();
-        if (cnt > 333)
-        {
-          printf("!");
-          PrintNRF24L01Status(status, __FILE__, __LINE__);
-          PrintNRF24L01Status(new_st, __FILE__, __LINE__);
-          cnt=0;
-        }
-        cnt++;
-        status=new_st;
-      }       
       break;       
     default:
       printf("Unknown state %d",state);
       state=0;
       break;
-  }*/
+  }
   return result;
 }
