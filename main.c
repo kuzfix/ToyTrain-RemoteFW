@@ -32,40 +32,19 @@ int main(void)
 	stdout=&UART0_str;
 	sei();
   
-  printf("Here we go:\r\n");
-/*  NRF24L01_Init();
-  NRF24L01_PowerDown();
-  _delay_ms(5);
-  NRF24L01_PowerUp();
-  _delay_ms(5);
-  NRF24L01_SetAirDataRate(PDLIB_NRF24_DRATE_1MBPS);
-  NRF24L01_SetARD(750);
-  NRF24L01_SetARC(15);
-  NRF24L01_SetPAGain(-12);*/
-  /* Set the address */
-  //NRF24L01_SetTXAddress(address);
-  
-  /* init hardware pins */
-  nrf24_init();
-      
-  /* Channel #2 , payload length: 4 */
-  nrf24_config(2,4);
-
-  /* Set the device addresses */
-  nrf24_tx_address(tx_address);
+  nrf24_init();                   // init hardware pins
+  nrf24_config(2,4);              // Channel #2 , payload length: 4
+  nrf24_tx_address(tx_address);   // Set device addresses
   nrf24_rx_address(rx_address);
 
 	printf("while(1):\r\n");
   while (1)
   {
-    /* Automatically goes to TX mode */
-    nrf24_send(data);
-            
-    /* Wait for transmission to end */
-    while(nrf24_isSending());
-
-    /* Make analysis on last transmission attempt */
-    temp = nrf24_lastMessageStatus();
+    
+    nrf24_send(data);                  // Automatically goes to TX mode
+    while(nrf24_isSending());         // Wait for transmission to end 
+    
+    temp = nrf24_lastMessageStatus(); // Make analysis on last transmission attempt 
 
     if(temp == NRF24_TRANSMISSON_OK)
     {
@@ -80,18 +59,11 @@ int main(void)
       else printf("\r\nL");
       oldSuccess=0;
     }
-            
-    /* Retransmission count indicates the transmission quality */
+    
+    nrf24_powerUpRx();  // Optionally, go back to RX mode ...
+    // nrf24_powerDown(); //Or you might want to power down after TX
 
-    /* Optionally, go back to RX mode ... */
-    nrf24_powerUpRx();
-
-    /* Or you might want to power down after TX */
-    // nrf24_powerDown();
-
-    /* Wait a little ... */
     _delay_ms(10);
-
   }
 }
 
