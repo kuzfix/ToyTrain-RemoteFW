@@ -15,14 +15,11 @@
 #include "UART0_IRQ.h"
 #include <util/delay.h>
 
-void PrintNRF24L01Status(int status, char* file, int line);
 int WakeupReceiver();
 
 int main(void)
 {
-	uint32_t t1;
-  int status;
-  char pipe;
+  int oldSuccess=0;
   char temp;
   uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
   uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
@@ -72,16 +69,19 @@ int main(void)
 
     if(temp == NRF24_TRANSMISSON_OK)
     {
-      printf("> Tranmission went OK\r\n");
+      temp = nrf24_retransmissionCount();
+      if (oldSuccess) printf(" %d", temp);
+      else printf("\r\nOK R=%d ",temp);
+      oldSuccess=1;
     }
     else if(temp == NRF24_MESSAGE_LOST)
     {
-      printf("> Message is lost ...\r\n");
+      if (!oldSuccess) printf("L");
+      else printf("\r\nL");
+      oldSuccess=0;
     }
             
     /* Retransmission count indicates the transmission quality */
-    temp = nrf24_retransmissionCount();
-    printf("> Retranmission count: %d\r\n",temp);
 
     /* Optionally, go back to RX mode ... */
     nrf24_powerUpRx();
@@ -94,44 +94,6 @@ int main(void)
 
   }
 }
-/*  while(1)
-	{
-    printf("S");
-  	status = NRF24L01_SendData(data, 4);
-    printf("s");
-  	if(PDLIB_NRF24_TX_FIFO_FULL == status)
-  	{
-      printf("FIFO ");
-    	NRF24L01_FlushTX();
-  	}else if(PDLIB_NRF24_TX_ARC_REACHED == status)
-  	{
-    	while(status == PDLIB_NRF24_TX_ARC_REACHED)
-    	{
-        printf("R");
-      	status = NRF24L01_AttemptTx();
-        _delay_ms(100);
-    	}
-  	}
-    printf("y");
-    _delay_ms(300);
-  }  
-  
-  
-    
-  while (1) 
-  {
-    if (HasOneMillisecondPassed())
-    {
-      WakeupReceiver();
-    }      
-
-		if (Has_X_MillisecondsPassed(1000,&t1))
-		{
-			LED_1Tgl();
-			printf(".");
-		}
-  }
-}
 
 int WakeupReceiver()
 {
@@ -141,7 +103,7 @@ int WakeupReceiver()
   static int status=0;
   int result=0, new_st;
     
-  switch (state)
+/*  switch (state)
   {
     case 0:
       NRF24L01_FlushTX();
@@ -186,21 +148,6 @@ int WakeupReceiver()
       printf("Unknown state %d",state);
       state=0;
       break;
-  }
+  }*/
   return result;
 }
-
-void PrintNRF24L01Status(int status, char* file, int line)
-{
-  switch (status)
-  {
-    case PDLIB_NRF24_SUCCESS: printf("\r\n%s,%d: Status = 0 (SUCCESS)",file,line); break;
-    case PDLIB_NRF24_ERROR: printf("\r\n%s,%d: Status = -1 (ERROR)",file,line); break;
-    case PDLIB_NRF24_TX_FIFO_FULL: printf("\r\n%s,%d: Status = -2 (TX_FIFO_FULL)",file,line); break;
-    case PDLIB_NRF24_TX_ARC_REACHED: printf("\r\n%s,%d: Status = -3 (TX_ARC_REACHED)",file,line); break;
-    case PDLIB_NRF24_INVALID_ARGUMENT: printf("\r\n%s,%d: Status = -4 (INVALID_ARGUMENT)",file,line); break;
-    case PDLIB_NRF24_BUFFER_TOO_SMALL: printf("\r\n%s,%d: Status = -5 (BUFFER_TOO_SMALL)",file,line); break;
-    default: printf("\r\n%s,%d: Unknown status = %d",file,line,status); break;
-  }
-}
-*/
