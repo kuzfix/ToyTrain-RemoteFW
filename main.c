@@ -107,7 +107,7 @@ void ProcessMsgQueue()
       if(status == NRF24_TRANSMISSON_OK)
       {
         state = 0;
-        printf("C%d",cnt);
+        printf("mC%d",cnt);
       }
       else //if(status == NRF24_MESSAGE_LOST)
       {
@@ -150,7 +150,7 @@ int WakeUpReceiver()
       {
         result = 1;
         state = 0;
-        printf("C%d",cnt);
+        printf("wC%d",cnt);
       }
       else //if(status == NRF24_MESSAGE_LOST)
       {
@@ -159,7 +159,7 @@ int WakeUpReceiver()
         {
           result = -1;
           state = 0;
-          printf("F");
+          printf("wF");
         }
         nrf24_send(data);
       }
@@ -203,11 +203,11 @@ int main(void)
       key = KBD_GetKey();
       switch (key)
       {
-        case BTN1: PushMsg((uint8_t*)"F50!"); break;
-        case BTN2: PushMsg((uint8_t*)"F99!"); break;
-        case BTN3: PushMsg((uint8_t*)"F00!"); break;
-        case BTN4: PushMsg((uint8_t*)"B99!"); break;
-        case BTN6: PushMsg((uint8_t*)"B50!"); break;
+        case BTN1: printf("  B1 "); PushMsg((uint8_t*)"F50!"); break;
+        case BTN2: printf("  B2 "); PushMsg((uint8_t*)"F99!"); break;
+        case BTN3: printf("  B3 "); PushMsg((uint8_t*)"F00!"); break;
+        case BTN4: printf("  B4 "); PushMsg((uint8_t*)"B99!"); break;
+        case BTN6: printf("  B6 "); PushMsg((uint8_t*)"B50!"); break;
       }
       /*if (WakeUpReceiver())
       {
