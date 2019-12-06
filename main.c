@@ -92,12 +92,19 @@ void ProcessMsgQueue()
   static uint8_t msg[5];  //initialized to zero before main, 5th byte never written (always \o)
   static int state,cnt;
   int status;
+  static int NRFstate=0;
   
   switch (state)
   {
     case 0: //WakeUp the receiver
       if (!isMsgQueueEmpty())
       {
+        if (!NRFstate)
+        {
+          NRFstate=1;
+          nrf24_powerUpTx();
+          break;
+        }
         status = WakeUpReceiver();
         if (status == -1) //ERROR - didn't wake up (report and discard message)
         {
@@ -132,7 +139,7 @@ void ProcessMsgQueue()
       status = nrf24_lastMessageStatus();
       if(status == NRF24_TRANSMISSON_OK)
       {
-        state = 0;
+        state = 4;
         printf("mC%d",cnt);
       }
       else //if(status == NRF24_MESSAGE_LOST)
@@ -140,11 +147,19 @@ void ProcessMsgQueue()
         cnt++;
         if (cnt > MAX_MSG_SEND_RETRIES)  //after MAX_MSG_SEND_RETRIES Give up
         {
-          state = 0;
+          state = 4;
           printf("Send failed (%s)",msg);
         }
         nrf24_send(msg);
       }
+      break;
+    case 4:
+      if (isMsgQueueEmpty())
+      {
+        NRFstate=0;
+        nrf24_powerDown();
+      }
+      status=0;
       break;
     default:
       printf("Unknown state %d (%s,L:%d,%s)",state,__FILE__,__LINE__,__FUNCTION__);
