@@ -14,6 +14,7 @@
 #include "systime.h"
 #include "UART0_IRQ.h"
 #include <util/delay.h>
+#include <avr/sleep.h>
 
 #define MAX_RETRIES 200
 int WakeUpReceiver();
@@ -39,6 +40,31 @@ int PullMsg(uint8_t* dst);
 int isMsgQueueFull() {return (MQN >=MSG_QUEUE_LENGTH);}
 int isMsgQueueEmpty() {return (!MQN);}
 int numberOfItemsInMsgQueue() {return MQN;}
+
+void InitSleep()
+{
+  //Init pin change interrupt for pins PE1,2,3,(PCINT25,26,27) PD5,6,7 (PCINT21,22,23)
+  //PCICR |= (1<<PCIE2) | (1<<PCIE3);
+  PCMSK2 |= (1<<PCINT21) | (1<<PCINT22) | (1<<PCINT23);
+  PCMSK3 |= (1<<PCINT25) | (1<<PCINT26) | (1<<PCINT27);
+  //Init sleep mode
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+}
+
+void GoToSleep()
+{
+  //TODO: Check the datasheet on all the details on how to conserve more power
+  sleep_enable();
+  PCIFR  = (1<<PCIF2) | (1<<PCIF3);
+  PCICR |= (1<<PCIE2) | (1<<PCIE3);
+  sleep_cpu();
+}
+
+ISR(PCINT1_vect)
+{
+  sleep_disable();
+  PCICR &= ~( (1<<PCIE2) | (1<<PCIE3) ); //disable these interrupts
+}
 
 int PushMsg(uint8_t* msg)
 {
@@ -172,7 +198,72 @@ int WakeUpReceiver()
   return result;
 }
 
+inline int isNum(char data)
+{
+  return ((data >= '0') && (data <= '9'));
+}
 
+void ReceiveBTcommand()
+{
+  static int state;
+  char  data;
+  static uint8_t cmd[4];
+  while (UART0_DataReady())
+  {
+    UART0_GetByte(&data);
+    
+    switch (state)
+    {
+      case 0: //waiting for '\n' (start of msg)
+        if (data == '\n') state++;
+        break;
+      case 1: //if valid command
+        if ((data == 'F') || (data == 'B') || (data == 'T') || (data == 't') || (data == 's'))
+        {
+          cmd[0]=data;
+          state++;
+        }
+        else state = 0;
+        break;
+      case 2: //if numeral
+        if (isNum(data))
+        {
+          cmd[1]=data;
+          state++;
+        }
+        else state = 0;
+        break;
+      case 3: //if numeral
+        if (isNum(data))
+        {
+          cmd[2]=data;
+          state++;
+        }
+        else state = 0;
+        break;
+      case 4: //if numeral or !, then send the message. Restart state machine.
+        if (cmd[0] == 's')
+        {
+          if (isNum(data))
+          {
+            cmd[3]=data;
+            PushMsg(cmd);
+          }
+        }
+        else if (data == '!')
+        {
+          cmd[3] = '!';
+          PushMsg(cmd);
+        }
+        state = 0;
+        break;
+      default:
+        printf("Unknown state %d (%s, L:%d, %s)",state,__FILE__,__LINE__,__FUNCTION__);
+        state=0;
+        break;
+    }
+  }
+}
 
 int main(void)
 {
@@ -186,6 +277,7 @@ int main(void)
 	Systime_Init();
 	UART0_Init();
 	stdout=&UART0_str;
+  InitSleep();
 	sei();
   
   nrf24_init();                   // init hardware pins
@@ -199,31 +291,17 @@ int main(void)
     if (HasOneMillisecondPassed())
     {
       ProcessMsgQueue();
+      ReceiveBTcommand();
       KBD_Read();
       key = KBD_GetKey();
       switch (key)
       {
-        case BTN1: printf("  B1 "); PushMsg((uint8_t*)"F50!"); break;
+        case BTN1: printf("  B1 "); PushMsg((uint8_t*)"F20!"); break;
         case BTN2: printf("  B2 "); PushMsg((uint8_t*)"F99!"); break;
         case BTN3: printf("  B3 "); PushMsg((uint8_t*)"F00!"); break;
         case BTN4: printf("  B4 "); PushMsg((uint8_t*)"B99!"); break;
-        case BTN6: printf("  B6 "); PushMsg((uint8_t*)"B50!"); break;
+        case BTN6: printf("  B6 "); PushMsg((uint8_t*)"B20!"); break;
       }
-      /*if (WakeUpReceiver())
-      {
-        nrf24_send((uint8_t*)"Msg!");
-        while(nrf24_isSending());         // Wait for transmission to end
-        temp = nrf24_lastMessageStatus(); // Make analysis on last transmission attempt
-        if(temp == NRF24_TRANSMISSON_OK)
-        {
-          temp = nrf24_retransmissionCount();
-          printf(" OK R=%d\r\n",temp);
-        }
-        else if(temp == NRF24_MESSAGE_LOST)
-        {
-          printf(" e\r\n");
-        }
-      }*/
     }
   }
 }
