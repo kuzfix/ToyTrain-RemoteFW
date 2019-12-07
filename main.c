@@ -16,6 +16,7 @@
 #include <util/delay.h>
 #include <avr/sleep.h>
 
+#define TIME_BEFORE_GOING_TO_SLEEP_ms  5000
 #define MAX_RETRIES 200
 int WakeUpReceiver();
 
@@ -47,6 +48,8 @@ void InitSleep()
   //PCICR |= (1<<PCIE2) | (1<<PCIE3);
   PCMSK2 |= (1<<PCINT21) | (1<<PCINT22) | (1<<PCINT23);
   PCMSK3 |= (1<<PCINT25) | (1<<PCINT26) | (1<<PCINT27);
+  //UART Start Frame detection
+  UCSR0D = (1<<SFDE);
   //Init sleep mode
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 }
@@ -57,12 +60,24 @@ void GoToSleep()
   sleep_enable();
   PCIFR  = (1<<PCIF2) | (1<<PCIF3);
   PCICR |= (1<<PCIE2) | (1<<PCIE3);
+  UCSR0D = (1<<RXS);  //clear flag before enabling interrupt (probably not necessary to do it separately from enabling the interrupt)
+  UCSR0D = (1<<RXSIE) | (1<RXS) | (1<<SFDE);  //Enable start frame detection and the associate interrupt
   sleep_cpu();
 }
 
+//Wakeup by serial communication
+ISR(USART0_START_vect)
+{
+  sleep_disable();
+  UCSR0D &= ~(1<<RXSIE);
+  PCICR &= ~( (1<<PCIE2) | (1<<PCIE3) ); //disable these interrupts
+}
+
+//Wakeup by button
 ISR(PCINT1_vect)
 {
   sleep_disable();
+  UCSR0D &= ~(1<<RXSIE);
   PCICR &= ~( (1<<PCIE2) | (1<<PCIE3) ); //disable these interrupts
 }
 
@@ -87,12 +102,13 @@ int PullMsg(uint8_t* dst)
 }
 
 #define MAX_MSG_SEND_RETRIES  10
-void ProcessMsgQueue()
+int ProcessMsgQueue()
 {
   static uint8_t msg[5];  //initialized to zero before main, 5th byte never written (always \o)
   static int state,cnt;
   int status;
   static int NRFstate=0;
+  int busy=1;
   
   switch (state)
   {
@@ -117,6 +133,10 @@ void ProcessMsgQueue()
         }
         //else: still trying...
       }
+      else
+      {
+        busy = 0;
+      }        
       break;
     case 1: //Get message
       if (PullMsg(msg))
@@ -157,9 +177,10 @@ void ProcessMsgQueue()
       if (isMsgQueueEmpty())
       {
         NRFstate=0;
+        busy = 0;
         nrf24_powerDown();
       }
-      status=0;
+      state=0;
       break;
     default:
       printf("Unknown state %d (%s,L:%d,%s)",state,__FILE__,__LINE__,__FUNCTION__);
@@ -167,6 +188,7 @@ void ProcessMsgQueue()
       break;
   }
   
+  return busy;
 }
 
 int WakeUpReceiver()
@@ -218,14 +240,17 @@ inline int isNum(char data)
   return ((data >= '0') && (data <= '9'));
 }
 
-void ReceiveBTcommand()
+int ReceiveBTcommand()
 {
   static int state;
   char  data;
   static uint8_t cmd[4];
+  int busy = 0;
+  
   while (UART0_DataReady())
   {
     UART0_GetByte(&data);
+    busy = 1;
     
     switch (state)
     {
@@ -278,11 +303,13 @@ void ReceiveBTcommand()
         break;
     }
   }
+  return busy;
 }
 
 int main(void)
 {
-  //char temp;
+  uint32_t u32_lastActivity=0;
+  int activity;
   char key;
   uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
   uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
@@ -305,20 +332,34 @@ int main(void)
   {
     if (HasOneMillisecondPassed())
     {
-      ProcessMsgQueue();
-      ReceiveBTcommand();
+      activity = ProcessMsgQueue();
+      if (activity) u32_lastActivity = GetSysTick();
+      activity = ReceiveBTcommand();
+      if (activity) u32_lastActivity = GetSysTick();
       KBD_Read();
       key = KBD_GetKey();
-      switch (key)
+      if (key)
       {
-        case BTN1: printf("  B1 "); PushMsg((uint8_t*)"F20!"); break;
-        case BTN2: printf("  B2 "); PushMsg((uint8_t*)"F99!"); break;
-        case BTN3: printf("  B3 "); PushMsg((uint8_t*)"F00!"); break;
-        case BTN4: printf("  B4 "); PushMsg((uint8_t*)"B99!"); break;
-        case BTN6: printf("  B6 "); PushMsg((uint8_t*)"B20!"); break;
+        switch (key)
+        {
+          case BTN1: printf("  B1 "); PushMsg((uint8_t*)"F20!"); break;
+          case BTN2: printf("  B2 "); PushMsg((uint8_t*)"F99!"); break;
+          case BTN3: printf("  B3 "); PushMsg((uint8_t*)"F00!"); break;
+          case BTN4: printf("  B4 "); PushMsg((uint8_t*)"B99!"); break;
+          case BTN6: printf("  B6 "); PushMsg((uint8_t*)"B20!"); break;
+        }
+        u32_lastActivity = GetSysTick();
+      }
+      if (GetSysTick() - u32_lastActivity > TIME_BEFORE_GOING_TO_SLEEP_ms)
+      {
+        printf("Sleep...");
+        _delay_ms(20);  //Wait until printf is finished
+        GoToSleep();
+        //Sleeping...
+        //After wakeing up:
+        u32_lastActivity = GetSysTick();
+        printf("Awake! ");
       }
     }
   }
 }
-
-
