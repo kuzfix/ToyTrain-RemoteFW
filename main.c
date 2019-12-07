@@ -74,7 +74,13 @@ ISR(USART0_START_vect)
 }
 
 //Wakeup by button
-ISR(PCINT1_vect)
+ISR(PCINT2_vect)
+{
+  sleep_disable();
+  UCSR0D &= ~(1<<RXSIE);
+  PCICR &= ~( (1<<PCIE2) | (1<<PCIE3) ); //disable these interrupts
+}
+ISR(PCINT3_vect)
 {
   sleep_disable();
   UCSR0D &= ~(1<<RXSIE);
@@ -213,7 +219,6 @@ int WakeUpReceiver()
       {
         result = 1;
         state = 0;
-        printf("wC%d",cnt);
       }
       else //if(status == NRF24_MESSAGE_LOST)
       {
@@ -222,7 +227,6 @@ int WakeUpReceiver()
         {
           result = -1;
           state = 0;
-          printf("wF");
         }
         nrf24_send(data);
       }
